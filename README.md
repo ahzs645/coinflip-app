@@ -4,7 +4,8 @@ A standalone 3D coin flip, extracted from the **Clickflip** browser extension an
 rebuilt as a Vite 8 app. Click the coin (or press Space / Enter) to keep flipping it. A
 running Heads/Tails tally sits at the bottom.
 
-**Live:** https://ahzs645.github.io/coinflip-app/
+**Live:** https://projects.ahmadjalil.com/coinflip-app/
+(also at https://ahzs645.github.io/coinflip-app/)
 
 Every push to `main` builds and deploys to GitHub Pages via
 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
