@@ -1,0 +1,148 @@
+:root {
+  color-scheme: dark;
+  --bg-0: #10131c;
+  --bg-1: #1b2130;
+  --ink: #eef1f7;
+  --muted: #8b93a7;
+  --heads: #ffd66b;
+  --tails: #8fb8ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    sans-serif;
+  color: var(--ink);
+  background: radial-gradient(
+      120% 120% at 50% 0%,
+      var(--bg-1) 0%,
+      var(--bg-0) 60%
+    )
+    fixed;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+}
+
+/* --- header --- */
+header {
+  padding: 22px 24px 0;
+  text-align: center;
+  pointer-events: none;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* --- the 3D stage fills the middle and is the click target --- */
+#stage {
+  position: relative;
+  min-height: 0;
+  cursor: pointer;
+}
+
+#stage canvas {
+  touch-action: manipulation;
+}
+
+/* --- result readout floats over the coin --- */
+#status {
+  position: absolute;
+  left: 50%;
+  bottom: 8%;
+  transform: translateX(-50%);
+  margin: 0;
+  font-size: clamp(28px, 7vw, 56px);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  transition: color 0.25s ease;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.45);
+}
+
+#status[data-face="heads"] {
+  color: var(--heads);
+}
+
+#status[data-face="tails"] {
+  color: var(--tails);
+}
+
+#hint {
+  position: absolute;
+  left: 50%;
+  top: 12px;
+  transform: translateX(-50%);
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+
+#hint.hidden {
+  opacity: 0;
+}
+
+/* --- footer tally --- */
+footer {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  padding: 0 24px 26px;
+}
+
+.tally {
+  min-width: 116px;
+  padding: 12px 20px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  text-align: center;
+  backdrop-filter: blur(6px);
+}
+
+.tally .label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.tally .count {
+  display: block;
+  font-size: 30px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+#tally-heads .count {
+  color: var(--heads);
+}
+
+#tally-tails .count {
+  color: var(--tails);
+}
