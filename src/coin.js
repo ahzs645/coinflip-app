@@ -41,12 +41,6 @@ const FACE_BUMP = 2.2;
 export class Coin {
   constructor(el, urlFor, profile = DEFAULT_COIN) {
     this.el = el;
-    this.profile = profile;
-
-    // Real-world proportions for this coin, in scene units.
-    const HALF_THICKNESS = halfThicknessFor(profile.thicknessRatio);
-    const COIN_THICKNESS = HALF_THICKNESS * 2;
-    this.halfThickness = HALF_THICKNESS;
     this.raf = 0;
     this.timer = new Timer();
     this.sim = null;
@@ -93,13 +87,13 @@ export class Coin {
     // --- textures & materials ---
     const maxAniso = renderer.capabilities.getMaxAnisotropy();
     const loader = new TextureLoader();
-    const loadColor = (name) => {
+    this.loadColor = (name) => {
       const t = loader.load(urlFor(name));
       t.colorSpace = SRGBColorSpace;
       t.anisotropy = maxAniso;
       return t;
     };
-    const loadLinear = (name) => {
+    this.loadLinear = (name) => {
       const t = loader.load(urlFor(name));
       t.anisotropy = maxAniso;
       return t;
@@ -108,7 +102,6 @@ export class Coin {
       new MeshStandardMaterial({
         bumpScale: FACE_BUMP,
         metalness: 1,
-        roughness: profile.roughness,
         envMapIntensity: 0.85,
         alphaTest: 0.5,
       });
@@ -118,68 +111,36 @@ export class Coin {
     const edgeMat = new MeshStandardMaterial({
       bumpScale: 4,
       metalness: 1,
-      roughness: profile.roughness + 0.02,
       envMapIntensity: 0.9,
     });
-
-    const obverseMap = loadColor(`${profile.obverse}.png`);
-    const reverseMap = loadColor(`${profile.reverse}.png`);
-    const obverseBump = loadLinear(`${profile.obverse}-bump.png`);
-    const reverseBump = loadLinear(`${profile.reverse}-bump.png`);
-    [obverseMap, reverseMap, obverseBump, reverseBump].forEach((t) => {
-      t.center.set(0.5, 0.5);
-      t.repeat.set(FACE_REPEAT, FACE_REPEAT);
-    });
-
-    const edgeMap = loadColor(`${profile.edge}.png`);
-    const edgeBump = loadLinear(`${profile.edge}-bump.png`);
-    [edgeMap, edgeBump].forEach((t) => {
-      t.wrapS = RepeatWrapping;
-      t.wrapT = ClampToEdgeWrapping;
-      t.repeat.set(EDGE_REPEAT, 1);
-    });
-
-    obverseMat.map = obverseMap;
-    obverseMat.bumpMap = obverseBump;
-    obverseMat.color = new Color(profile.faceTint);
-    reverseMat.map = reverseMap;
-    reverseMat.bumpMap = reverseBump;
-    reverseMat.color = new Color(profile.faceTint);
-    edgeMat.map = edgeMap;
-    edgeMat.bumpMap = edgeBump;
-    edgeMat.color = new Color(profile.edgeTint);
+    this.materials = { obverseMat, reverseMat, edgeMat };
+    this.coinTextures = []; // replaced wholesale on every profile change
 
     // --- coin geometry: an edge cylinder capped by two textured face discs ---
+    // The cylinder is rebuilt per profile, since thickness is coin-specific.
     const coin = new Group();
-    const edgeGeo = new CylinderGeometry(
-      COIN_RADIUS,
-      COIN_RADIUS,
-      COIN_THICKNESS,
-      256,
-      1,
-      true, // open-ended: the discs close it off
-    );
-    const edgeMesh = new Mesh(edgeGeo, edgeMat);
+    const edgeMesh = new Mesh(undefined, edgeMat);
     edgeMesh.castShadow = true;
     coin.add(edgeMesh);
 
     const faceGeo = new CircleGeometry(COIN_RADIUS, 128);
     const topFace = new Mesh(faceGeo, obverseMat); // Heads
     topFace.rotation.x = -HALF_PI;
-    topFace.position.y = COIN_THICKNESS / 2 + 5e-4;
     topFace.castShadow = true;
     coin.add(topFace);
 
     const bottomFace = new Mesh(faceGeo, reverseMat); // Tails
     bottomFace.rotation.x = HALF_PI;
-    bottomFace.position.y = -COIN_THICKNESS / 2 - 5e-4;
     bottomFace.castShadow = true;
     coin.add(bottomFace);
 
-    coin.position.y = HALF_THICKNESS;
     coin.rotation.x = this.parityOffset;
     scene.add(coin);
     this.coin = coin;
+    this.meshes = { edgeMesh, topFace, bottomFace };
+
+    // Textures, tints and thickness all come from the profile.
+    this.setProfile(profile);
 
     // --- lights ---
     scene.add(new HemisphereLight(0xffffff, 0x9a9ea8, 0.42));
@@ -249,19 +210,13 @@ export class Coin {
     this.disposers.push(() => {
       cancelAnimationFrame(this.raf);
       resizeObserver.disconnect();
-      [
-        obverseMap,
-        reverseMap,
-        obverseBump,
-        reverseBump,
-        edgeMap,
-        edgeBump,
-        envTex,
-      ].forEach((t) => t.dispose());
+      [...this.coinTextures, envTex].forEach((t) => t.dispose());
       [obverseMat, reverseMat, edgeMat, shadowCatcher.material].forEach((m) =>
         m.dispose(),
       );
-      [edgeGeo, faceGeo, shadowCatcher.geometry].forEach((g) => g.dispose());
+      [edgeMesh.geometry, faceGeo, shadowCatcher.geometry].forEach((g) =>
+        g.dispose(),
+      );
       pmrem.dispose();
       renderer.dispose();
       if (renderer.domElement.parentNode === el) {
@@ -272,6 +227,71 @@ export class Coin {
 
   get busy() {
     return this.sim !== null;
+  }
+
+  // Swap in a different coin: its faces, its tints, its thickness. The renderer, scene
+  // and lighting are left alone, so this is cheap enough to drive from a UI toggle —
+  // no second WebGL context, no reload. Safe to call between tosses, not during one.
+  setProfile(profile) {
+    const { obverseMat, reverseMat, edgeMat } = this.materials;
+    this.coinTextures.forEach((t) => t.dispose());
+
+    const faceMaps = [
+      this.loadColor(`${profile.obverse}.png`),
+      this.loadLinear(`${profile.obverse}-bump.png`),
+      this.loadColor(`${profile.reverse}.png`),
+      this.loadLinear(`${profile.reverse}-bump.png`),
+    ];
+    faceMaps.forEach((t) => {
+      t.center.set(0.5, 0.5);
+      t.repeat.set(FACE_REPEAT, FACE_REPEAT);
+    });
+    const [obverseMap, obverseBump, reverseMap, reverseBump] = faceMaps;
+
+    const edgeMap = this.loadColor(`${profile.edge}.png`);
+    const edgeBump = this.loadLinear(`${profile.edge}-bump.png`);
+    [edgeMap, edgeBump].forEach((t) => {
+      t.wrapS = RepeatWrapping;
+      t.wrapT = ClampToEdgeWrapping;
+      t.repeat.set(EDGE_REPEAT, 1);
+    });
+    this.coinTextures = [...faceMaps, edgeMap, edgeBump];
+
+    for (const [mat, map, bump] of [
+      [obverseMat, obverseMap, obverseBump],
+      [reverseMat, reverseMap, reverseBump],
+    ]) {
+      mat.map = map;
+      mat.bumpMap = bump;
+      mat.color = new Color(profile.faceTint);
+      mat.roughness = profile.roughness;
+      mat.needsUpdate = true;
+    }
+    edgeMat.map = edgeMap;
+    edgeMat.bumpMap = edgeBump;
+    edgeMat.color = new Color(profile.edgeTint);
+    edgeMat.roughness = profile.roughness + 0.02;
+    edgeMat.needsUpdate = true;
+
+    // Thickness is the one dimension that differs between coins.
+    const halfThickness = halfThicknessFor(profile.thicknessRatio);
+    const thickness = halfThickness * 2;
+    const { edgeMesh, topFace, bottomFace } = this.meshes;
+    edgeMesh.geometry?.dispose();
+    edgeMesh.geometry = new CylinderGeometry(
+      COIN_RADIUS,
+      COIN_RADIUS,
+      thickness,
+      256,
+      1,
+      true, // open-ended: the discs close it off
+    );
+    topFace.position.y = thickness / 2 + 5e-4;
+    bottomFace.position.y = -thickness / 2 - 5e-4;
+
+    this.profile = profile;
+    this.halfThickness = halfThickness;
+    if (!this.sim) this.coin.position.y = halfThickness; // resettle if idle
   }
 
   // Start a toss. Resolves with "Heads" or "Tails" once the coin comes to rest.

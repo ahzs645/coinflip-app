@@ -4,8 +4,8 @@ A standalone 3D coin flip, extracted from the **Clickflip** browser extension an
 rebuilt as a Vite 8 app. Click the coin (or press Space / Enter) to keep flipping it. A
 running Heads/Tails tally sits at the bottom.
 
-It currently flips a Canadian quarter — the caribou 25¢. A US Washington quarter is
-also included; see [Coins](#coins).
+Flips a Canadian caribou 25¢ or a US Washington quarter — switch with the toggle under
+the title. See [Coins](#coins).
 
 **Live:** https://projects.ahmadjalil.com/coinflip-app/
 (also at https://ahzs645.github.io/coinflip-app/)
@@ -24,15 +24,17 @@ Every push to `main` builds and deploys to GitHub Pages via
 - **`src/coin.js`** — the three.js renderer (a `Coin` class): a metallic coin lit by a
   `RoomEnvironment`, with a soft contact shadow. `flip(seed)` resolves with the landed
   face.
-- **`src/main.js`** — wires clicks/keys to a flip and updates the tally.
+- **`src/main.js`** — wires clicks/keys to a flip, drives the coin picker, and updates
+  the tally.
 - **`public/textures/`** — each coin's color + bump maps (obverse, reverse, edge).
 - **`tools/make-coin-textures.py`** — turns a straight-down photo of a coin face into the
   texture pair the renderer expects.
 
 ## Coins
 
-`src/coins.js` holds one profile per coin. Change `DEFAULT_COIN` to switch which one the
-app flips:
+The toggle under the title swaps coins in place — same WebGL context, no reload.
+`src/coins.js` holds one profile per coin, and `DEFAULT_COIN` picks the one that loads
+first:
 
 | Coin | Diameter | Thickness | Alloy |
 | --- | --- | --- | --- |
@@ -54,8 +56,9 @@ python3 tools/make-coin-textures.py reverse.jpg public/textures/<name>-reverse
 ```
 
 That writes a colour map and a bump map for each face, normalised to the same contrast as
-the existing sets. Add a profile to `src/coins.js` pointing at them. The reeded edge strip
-(`quarter-edge`) is shared — any milled coin can reuse it.
+the existing sets. Add a profile to `src/coins.js` pointing at them, and a button carrying
+its `data-coin` id to the picker in `index.html`. The reeded edge strip (`quarter-edge`)
+is shared — any milled coin can reuse it.
 
 ## Develop
 
