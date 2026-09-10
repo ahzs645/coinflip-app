@@ -11,8 +11,14 @@ const TWO_PI = 2 * PI;
 const HALF_PI = PI / 2;
 
 export const COIN_RADIUS = 1.2;
-export const COIN_THICKNESS = 2 * COIN_RADIUS * 0.0721;
-export const HALF_THICKNESS = COIN_THICKNESS / 2; // 0.08652 — resting half-height
+
+// Thickness as a fraction of diameter — the one dimension that differs between coins.
+// The US Washington quarter is 1.75 mm thick and 24.26 mm across.
+export const DEFAULT_THICKNESS_RATIO = 1.75 / 24.26;
+
+// A coin's resting half-height, in scene units.
+export const halfThicknessFor = (ratio = DEFAULT_THICKNESS_RATIO) =>
+  COIN_RADIUS * ratio;
 
 // Fast sine: range-reduce to [-π/2, π/2] then a 9th-order Taylor series.
 function fastSin(x) {
@@ -32,10 +38,10 @@ function fastCos(x) {
 
 // Distance from the coin's centre to the floor at a given tilt. The coin rests once
 // posY falls to this value: radius·|sin| (on edge) + halfThickness·|cos| (lying flat).
-export function groundClearance(rot) {
+export function groundClearance(rot, halfThickness) {
   return (
     COIN_RADIUS * Math.abs(fastSin(rot)) +
-    HALF_THICKNESS * Math.abs(fastCos(rot))
+    halfThickness * Math.abs(fastCos(rot))
   );
 }
 
@@ -51,7 +57,8 @@ function mulberry32(seed) {
 }
 
 // Build the initial state for a toss. dropX/dropZ bias where the coin is launched from.
-export function initSim(seed, dropX = 0, dropZ = 0) {
+export function initSim(seed, dropX = 0, dropZ = 0, ratio = DEFAULT_THICKNESS_RATIO) {
+  const halfThickness = halfThicknessFor(ratio);
   const rand = mulberry32(seed >>> 0);
   const upVelocity = 8.4 + rand() * 2.2;
   const spinVelocity = 30 + rand() * 44;
@@ -66,9 +73,10 @@ export function initSim(seed, dropX = 0, dropZ = 0) {
   }
 
   return {
+    halfThickness,
     rotX: 0,
     posX: dropX,
-    posY: HALF_THICKNESS,
+    posY: halfThickness,
     posZ: dropZ,
     velX: vx,
     velY: upVelocity,
@@ -110,11 +118,11 @@ export function step(s) {
       s.velRot += -42 * Math.sign(beta) * dt; // restoring torque
       s.velRot -= s.velRot * Math.min(1, 6 * dt);
       s.velSpinY -= s.velSpinY * Math.min(1, 4 * dt);
-      s.posY = groundClearance(s.rotX);
+      s.posY = groundClearance(s.rotX, s.halfThickness);
 
       if (Math.abs(beta) < 0.02 && Math.abs(s.velRot) < 0.35) {
         s.rotX = nearest;
-        s.posY = HALF_THICKNESS;
+        s.posY = s.halfThickness;
         s.velRot = s.velY = s.velX = s.velZ = s.velSpinY = 0;
         s.done = true;
       }
@@ -125,7 +133,7 @@ export function step(s) {
       s.posX += s.velX * dt;
       s.posZ += s.velZ * dt;
 
-      const floor = groundClearance(s.rotX);
+      const floor = groundClearance(s.rotX, s.halfThickness);
       if (s.posY < floor) {
         s.posY = floor;
         if (s.velY < 0) {
@@ -148,7 +156,7 @@ export function step(s) {
   // Safety net: force a resolved result if it somehow never settles.
   if (!s.done && s.time > 6) {
     s.rotX = Math.round(s.rotX / PI) * PI;
-    s.posY = HALF_THICKNESS;
+    s.posY = s.halfThickness;
     s.done = true;
   }
 }
@@ -164,16 +172,16 @@ export function advance(s, dt, maxSteps = 8) {
 }
 
 // Run a toss to completion with no rendering and return its parity (rotX / π, rounded).
-export function simulateResult(seed) {
-  const s = initSim(seed);
+export function simulateResult(seed, ratio = DEFAULT_THICKNESS_RATIO) {
+  const s = initSim(seed, 0, 0, ratio);
   let guard = 0;
   while (!s.done && guard++ < 2e5) step(s);
   return Math.round(s.rotX / PI);
 }
 
 // The face a seed lands on, computed purely (no rendering). Odd parity = Tails.
-export function faceForSeed(seed) {
-  return simulateResult(seed) & 1 ? "Tails" : "Heads";
+export function faceForSeed(seed, ratio = DEFAULT_THICKNESS_RATIO) {
+  return simulateResult(seed, ratio) & 1 ? "Tails" : "Heads";
 }
 
 function randomSeed() {
@@ -182,14 +190,14 @@ function randomSeed() {
 
 // Pick a seed whose deterministic outcome matches a cryptographically-fair coin toss.
 // This keeps the odds a true 50/50 even though the physics itself is deterministic.
-export function fairFlip() {
+export function fairFlip(ratio = DEFAULT_THICKNESS_RATIO) {
   const face = randomSeed() & 1 ? "Tails" : "Heads";
   const wantParity = face === "Heads" ? 0 : 1;
   for (let i = 0; i < 200; i++) {
     const seed = randomSeed();
-    if ((simulateResult(seed) & 1) === wantParity) return { seed, face };
+    if ((simulateResult(seed, ratio) & 1) === wantParity) return { seed, face };
   }
   // Extremely unlikely fallback: accept whatever this seed produces.
   const seed = randomSeed();
-  return { seed, face: faceForSeed(seed) };
+  return { seed, face: faceForSeed(seed, ratio) };
 }

@@ -1,6 +1,7 @@
 import "./style.css";
 import { Coin } from "./coin.js";
 import { fairFlip } from "./physics.js";
+import { DEFAULT_COIN } from "./coins.js";
 
 // Textures live in /public/textures and are served relative to the app's base URL.
 const urlFor = (name) => `${import.meta.env.BASE_URL}textures/${name}`;
@@ -11,7 +12,7 @@ const headsEl = document.querySelector("#tally-heads .count");
 const tailsEl = document.querySelector("#tally-tails .count");
 const hintEl = document.getElementById("hint");
 
-const coin = new Coin(stage, urlFor);
+const coin = new Coin(stage, urlFor, DEFAULT_COIN);
 
 const tally = { Heads: 0, Tails: 0 };
 let flips = 0;
@@ -22,7 +23,7 @@ async function flip() {
   statusEl.textContent = "Flipping…";
   statusEl.dataset.face = "";
 
-  const { seed } = fairFlip();
+  const { seed } = fairFlip(DEFAULT_COIN.thicknessRatio);
   const result = await coin.flip(seed);
 
   tally[result] += 1;

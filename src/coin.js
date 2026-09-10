@@ -29,19 +29,24 @@ import {
 } from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
-import { initSim, advance, COIN_RADIUS, COIN_THICKNESS, HALF_THICKNESS } from "./physics.js";
+import { initSim, advance, COIN_RADIUS, halfThicknessFor } from "./physics.js";
+import { DEFAULT_COIN } from "./coins.js";
 
 const HALF_PI = Math.PI / 2;
 
 const FACE_REPEAT = 0.935; // trims the face texture in a touch from the geometry edge
 const EDGE_REPEAT = 2; // times the reeded edge texture wraps around the rim
-const FACE_TINT = 0xd9dadc;
-const EDGE_TINT = 0xd9dadc;
 const FACE_BUMP = 2.2;
 
 export class Coin {
-  constructor(el, urlFor) {
+  constructor(el, urlFor, profile = DEFAULT_COIN) {
     this.el = el;
+    this.profile = profile;
+
+    // Real-world proportions for this coin, in scene units.
+    const HALF_THICKNESS = halfThicknessFor(profile.thicknessRatio);
+    const COIN_THICKNESS = HALF_THICKNESS * 2;
+    this.halfThickness = HALF_THICKNESS;
     this.raf = 0;
     this.timer = new Timer();
     this.sim = null;
@@ -103,7 +108,7 @@ export class Coin {
       new MeshStandardMaterial({
         bumpScale: FACE_BUMP,
         metalness: 1,
-        roughness: 0.34,
+        roughness: profile.roughness,
         envMapIntensity: 0.85,
         alphaTest: 0.5,
       });
@@ -113,21 +118,21 @@ export class Coin {
     const edgeMat = new MeshStandardMaterial({
       bumpScale: 4,
       metalness: 1,
-      roughness: 0.36,
+      roughness: profile.roughness + 0.02,
       envMapIntensity: 0.9,
     });
 
-    const obverseMap = loadColor("quarter-obverse.png");
-    const reverseMap = loadColor("quarter-reverse.png");
-    const obverseBump = loadLinear("quarter-obverse-bump.png");
-    const reverseBump = loadLinear("quarter-reverse-bump.png");
+    const obverseMap = loadColor(`${profile.obverse}.png`);
+    const reverseMap = loadColor(`${profile.reverse}.png`);
+    const obverseBump = loadLinear(`${profile.obverse}-bump.png`);
+    const reverseBump = loadLinear(`${profile.reverse}-bump.png`);
     [obverseMap, reverseMap, obverseBump, reverseBump].forEach((t) => {
       t.center.set(0.5, 0.5);
       t.repeat.set(FACE_REPEAT, FACE_REPEAT);
     });
 
-    const edgeMap = loadColor("quarter-edge.png");
-    const edgeBump = loadLinear("quarter-edge-bump.png");
+    const edgeMap = loadColor(`${profile.edge}.png`);
+    const edgeBump = loadLinear(`${profile.edge}-bump.png`);
     [edgeMap, edgeBump].forEach((t) => {
       t.wrapS = RepeatWrapping;
       t.wrapT = ClampToEdgeWrapping;
@@ -136,13 +141,13 @@ export class Coin {
 
     obverseMat.map = obverseMap;
     obverseMat.bumpMap = obverseBump;
-    obverseMat.color = new Color(FACE_TINT);
+    obverseMat.color = new Color(profile.faceTint);
     reverseMat.map = reverseMap;
     reverseMat.bumpMap = reverseBump;
-    reverseMat.color = new Color(FACE_TINT);
+    reverseMat.color = new Color(profile.faceTint);
     edgeMat.map = edgeMap;
     edgeMat.bumpMap = edgeBump;
-    edgeMat.color = new Color(EDGE_TINT);
+    edgeMat.color = new Color(profile.edgeTint);
 
     // --- coin geometry: an edge cylinder capped by two textured face discs ---
     const coin = new Group();
@@ -273,7 +278,7 @@ export class Coin {
   flip(seed) {
     return new Promise((resolve) => {
       this.landResolve = resolve;
-      this.sim = initSim(seed, 0, 0);
+      this.sim = initSim(seed, 0, 0, this.profile.thicknessRatio);
     });
   }
 
